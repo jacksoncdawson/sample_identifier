@@ -7,6 +7,25 @@ import soundfile as sf
 import uuid
 from tqdm import tqdm
 
+def _already_flattened(root_path: str) -> bool:
+    """
+    Check if the audio samples have already been flattened.
+
+    Args:
+        root_path (str): Root directory containing 'canonical' audio files and 'labels.csv'.
+
+    Returns:
+        bool: True if data is already flattened, False otherwise.
+    """
+    canonical_path = os.path.join(root_path, "canonical")
+    os.makedirs(canonical_path, exist_ok=True)
+    len_files = len([f for f in os.listdir(canonical_path) if os.path.isfile(os.path.join(canonical_path, f))])
+    
+    labels_path = os.path.join(root_path, "labels.csv")
+    len_labels = len(pd.read_csv(labels_path)) if os.path.exists(labels_path) else 0
+    
+    return len_files > 0 and len_labels == len_files
+
 
 def flatten_samples(root_path: str):
     """
@@ -21,8 +40,11 @@ def flatten_samples(root_path: str):
         None
     """
 
-    labels = []
+    if _already_flattened(root_path):
+        print("Data already flattened. Skipping...")
+        return
 
+    labels = []
     for root, _, files in os.walk(os.path.join(root_path, "raw")):
         for file in files:
             if file.endswith(".wav"):
@@ -30,10 +52,10 @@ def flatten_samples(root_path: str):
                 # Construct Paths
                 wav_path = os.path.join(
                     root, file
-                )  # "/.../sample_identifier/data/raw/source/category/subcategory/file.wav"
+                )  
                 rel_path = os.path.relpath(
                     wav_path, os.path.join(root_path, "raw")
-                )  # "source/category/subcategory/file.wav"
+                )  
                 path_parts = rel_path.split(os.sep)
 
                 # Extract category structure from path
@@ -425,16 +447,33 @@ def extract_features(wav_path: str, mode: str = "qc") -> dict:
     return features
 
 
-def process_samples(root_path: str):
+def _already_processed(root_path: str, mode: str = "qc") -> bool:
+    
+    features_path = os.path.join(root_path, f"features_{mode}.csv")
+    return os.path.exists(features_path)
+
+
+def process_samples(root_path: str, mode: str = "qc"):
+    """Extract features from all canonical audio samples in the given root path.
+
+    Args:
+        root_path (str): Root directory containing 'canonical' audio files.
+        mode (str, optional): Feature extraction mode ('qc' or 'full'). Defaults to "qc".
+    """
+    
+    if _already_processed(root_path, mode=mode):
+        print(f"Features already extracted in mode '{mode}'. Skipping...")
+        return
+    
     rows = []
     canonical_dir = os.path.join(root_path, "canonical")
     wav_files = [file for file in os.listdir(canonical_dir) if file.endswith(".wav")]
     for file in tqdm(wav_files, desc="Processing samples"):
         sample_id = file.replace(".wav", "")
         wav_path = os.path.join(canonical_dir, file)
-        row = extract_features(wav_path, "qc")
+        row = extract_features(wav_path, mode=mode)
         row["id"] = sample_id
         rows.append(row)
 
     df = pd.DataFrame(rows)
-    df.to_csv(os.path.join(root_path, "features.csv"), index=False)
+    df.to_csv(os.path.join(root_path, f"features_{mode}.csv"), index=False)
