@@ -1,4 +1,4 @@
-1. finish first pass in review_loop (300 of 500 completed currently)
+[ COMPLETE ] 1. finish first pass in review_loop (300 of 500 completed currently) 
 2. apply category changes where marked in review_loop
 
 3. filter through suspicious categories
